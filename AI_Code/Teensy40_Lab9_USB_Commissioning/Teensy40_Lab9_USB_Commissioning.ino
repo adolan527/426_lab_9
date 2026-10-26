@@ -5,8 +5,8 @@
   - ESC PWM outputs are D4 (Motor A) and D23 (Motor B), 250 Hz.
   - Boot/STOP/fault command 1000 us on both outputs.
   - PID gains default to zero. Resume is explicit and safety-gated.
-  - MIXER_SIGN is deliberately 0 until physical correction direction is verified.
-    With MIXER_SIGN == 0, Resume is rejected and outputs remain stopped.
+  - MIXER_SIGN is +1 for +Y toward Motor A, +Z upward, and upward motor thrust.
+    Set MIXER_SIGN to 0 to interlock Resume during direction commissioning.
   - While stopped, control overrun is recorded but NOT latched; while running,
     an overrun greater than 8 ms still latches a stop with measured timing.
   - Before enabling the mixer, confirm which motor command corrects positive
@@ -18,6 +18,8 @@
     MPU6050 SCL -> Teensy D19
     MPU6050 AD0 -> Teensy D17 (driven LOW to select address 0x68; see note below)
     MPU6050 INT -> D16 (ignored)
+    MPU6050 +Y axis points along the beam toward Motor A.
+    With +Z beam-normal, positive beam angle means Motor A is up.
     Motor A ESC signal -> Teensy D4
     Motor B ESC signal -> Teensy D23
     ESC signal ground and Teensy ground must be common.
@@ -52,9 +54,12 @@ static constexpr int ESC_MIN_RUN_US = 1100;
 static constexpr int ESC_MAX_RUN_US = 1650;
 static constexpr float RESUME_MAX_ANGLE_DEG = 10.0f;
 static constexpr float RESUME_MAX_GYRO_DPS = 20.0f;
-// Deliberate commissioning interlock. Set to +1 or -1 ONLY after the physical
-// correction direction is confirmed. +1 maps A=base+PID, B=base-PID.
-static constexpr int MIXER_SIGN = -1;
+// +Y points toward Motor A and +Z points upward when level. With upward thrust,
+// positive angle (A up) needs less A thrust and more B thrust. Since error is
+// target-angle, +1 gives that negative-feedback correction: A=base+PID,
+// B=base-PID. Confirm this direction on the restrained rig before tuning.
+// Set to 0 to reject Resume while commissioning an unverified mounting.
+static constexpr int MIXER_SIGN = +1;
 static constexpr uint32_t BAUD_RATE = 115200;
 static constexpr uint32_t I2C_FREQ = 400000; // MPU6050 supports 400 kHz fast-mode I2C
 
@@ -108,7 +113,8 @@ void updatePid(float dtSeconds) {
     return;
   }
 
-  // Angle is atan2(accelY, accelZ), so its nominal rotation axis is X.
+  // Sensor +Y points toward Motor A. Angle is atan2(accelY, accelZ),
+  // so positive angle means Motor A is up; its nominal rotation axis is X.
   // Derivative-on-measurement avoids a derivative kick when target changes.
   pTerm = kp * errorDeg;
   dTerm = -kd * gyroXDps;
@@ -181,6 +187,8 @@ void applyMotorMix() {
     return;
   }
   const int differentialUs = (int)lroundf((float)MIXER_SIGN * pidOutput);
+  // Equal pulses are equal ESC commands, not necessarily equal physical thrust.
+  // A propeller-following imbalance must be diagnosed before adding any trim.
   motorACommandUs = constrain(ESC_BASE_US + differentialUs, ESC_MIN_RUN_US, ESC_MAX_RUN_US);
   motorBCommandUs = constrain(ESC_BASE_US - differentialUs, ESC_MIN_RUN_US, ESC_MAX_RUN_US);
   writeEscPulseUs(MOTOR_A_PIN, motorACommandUs);
@@ -470,8 +478,8 @@ void loop() {
       accelYG = corrected.accel[1];
       accelZG = corrected.accel[2];
 
-      // Confirmed physical convention: accel Y is negative when Motor A is down
-      // and positive when Motor A is up. This angle assumes +Z is beam-normal.
+      // Sensor +Y points toward Motor A; +Z is beam-normal.
+      // Accel Y is negative when Motor A is down and positive when Motor A is up.
       angleDeg = atan2f(corrected.accel[1], corrected.accel[2]) * RAD_TO_DEG_F;
       errorDeg = targetDeg - angleDeg;
 
