@@ -1,0 +1,19 @@
+# Student beam tuner integration kit
+
+This kit supplies the communication interface for your own Teensy firmware to work with the existing PID tuner app. It contains no instructor beam sketch, PID algorithm, tuned gains, attitude filter, motor mixer, motor driver or flashable firmware.
+
+1. Install Arduino IDE with Teensy support and select Teensy 4.0. Choose one: HiLetgo MPU6050 (GY-521), Adafruit MPU6050 or Adafruit LSM6DSO32. Install Adafruit MPU6050 for either MPU board, or Adafruit LSM6DS for LSM; both use Adafruit Unified Sensor and Adafruit BusIO. Confirm the exact module, pinout and bus.
+2. Create your own sketch. Place `PidLink.h` and `TunerDescriptor.h` beside it. The descriptor has zero-gain defaults and describes app controls; it is not a controller. Read `HARDWARE.md` and `INTEGRATION.md` before implementing anything.
+3. Implement the callbacks, sensor reading, estimator, PID, motor output and telemetry yourself. Lab 9 requires a 250 Hz control loop (4 ms nominal period). Choose PWM or OneShot125 and an ESC-supported output frame rate; measure both timings. Keep outputs stopped at boot and all PID gains initially zero. The header does not read an IMU, compute PID or stop motors for you.
+4. Compile/upload your code. With ESC power disconnected, open the installed app's beam/lab page and connect to Teensy USB. Close Serial Monitor so only the tuner owns the port. The app discovers your descriptor and builds its controls.
+5. Complete the USB-only section of `ACCEPTANCE.md` before the instructor's powered, restrained-beam test. Complete its physical checks during the approved test and live TA demo. Props may remain fitted during initial USB-only checks when ESC power is disconnected. Follow the instructor's rules for every other procedure.
+
+Use the instructor-provided app installer; no app executable is included. Read `AI_IMPLEMENTATION_BRIEF.md` as a planning checklist. Choose your IMU and PWM/OneShot125 before asking your AI for a complete Teensy project; write your own prompt and attach this entire kit plus a labeled rig sketch. Inspect and validate all generated code.
+
+The communication interface originates from the instructor’s reference build. Its example uses one `beam` controller. A single-loop or cascaded design is allowed if controller IDs, parameter IDs and telemetry references agree. An additional loop needs its own ID, for example `beam_rate`, and its own measurement, setpoint, error and terms. Do not copy a controller architecture or sensor-axis mapping without justifying it for your actual rig.
+
+`PidLink.h` retains the original communication interface; this revision changes the default calibration sample interval from 2500 to 4000 microseconds for the 250 Hz lab. Calibration support and EEPROM persistence are included in this communication header; consult `INTEGRATION.md` for ownership and timing. This Lab 9 copy uses a 250 Hz control-rate example, replaces the ready-written AI brief with planning guidance and uses live acceptance with no Moodle upload. The descriptor is an MPU6050/I²C/OneShot125 example, not a required hardware/protocol choice: choose your own compatible module pins, then update sensor, bus, GPIOs, output protocol/rate, units and limits to your implementation. The example contains no output GPIO assignments. The instructor's original ZIP remains separate.
+
+## October 12 update for MPU and LSM
+
+Both sensor paths retain zero-gain defaults and student-owned sensor, estimator, PID, mixer and output code. Read the new calibration timing, fresh-data recovery and calibration-isolation guidance in INTEGRATION.md. The acceptance checklist now explicitly checks calibration/save/reboot/Resume and first-conversion recovery with ESC power disconnected. No instructor solution or tuned gains are supplied. The archive/folder name is retained to match the handout.
